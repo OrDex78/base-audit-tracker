@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { keccak256, toBytes } from "viem";
+import { lookupRegistry, computeSafetyScore, getRedFlags, auditRegistry } from "@/lib/auditRegistry";
+import type { RegistryEntry } from "@/lib/auditRegistry";
 
 const CONTRACT_ADDRESS = "0xD060A6B3f065216c1D92B3F29ef67D65eCe06567";
 const CONTRACT_ABI = [
@@ -43,6 +45,9 @@ interface SearchResult {
   contractName?: string;
   compiler?: string;
   error?: boolean;
+  registry?: RegistryEntry | null;
+  safetyScore?: number;
+  redFlags?: string[];
 }
 
 export default function App() {
@@ -94,11 +99,16 @@ export default function App() {
       if (data.error) {
         setSearchResult({ address: searchAddress, error: true });
       } else {
+        const reg = lookupRegistry(data.address);
+        const verified = !!data.isVerified;
         setSearchResult({
           address: data.address,
-          isVerified: data.isVerified,
-          contractName: data.contractName || "Unknown",
+          isVerified: verified,
+          contractName: reg?.displayName || data.contractName || "Unknown",
           compiler: data.compiler || "Unknown",
+          registry: reg,
+          safetyScore: computeSafetyScore(verified, reg),
+          redFlags: getRedFlags(verified, reg),
         });
       }
     } catch {
@@ -137,9 +147,7 @@ export default function App() {
           Base Audit Tracker
         </h1>
         <p style={{ fontSize: "12px", color: "#666", margin: 0 }}>
-          {totalFindings !== undefined
-            ? `${totalFindings.toString()} findings onchain`
-            : "Loading..."}
+          Check Base contract risk and timestamp findings onchain
         </p>
       </div>
 
@@ -213,56 +221,152 @@ export default function App() {
             {searching ? "Searching..." : "Check Contract"}
           </button>
 
-          {searchResult && !searchResult.error && (
-            <div style={{
-              background: "#111",
-              borderRadius: "12px",
-              padding: "16px",
-              border: `1px solid ${searchResult.isVerified ? "#22c55e33" : "#ef444433"}`,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
-                <span style={{ fontSize: "14px", fontWeight: "600" }}>
-                  {searchResult.contractName}
-                </span>
-                <span style={{
-                  fontSize: "12px",
-                  padding: "2px 8px",
-                  borderRadius: "20px",
-                  background: searchResult.isVerified ? "#22c55e22" : "#ef444422",
-                  color: searchResult.isVerified ? "#22c55e" : "#ef4444",
+          {searchResult && !searchResult.error && (() => {
+            const riskColor = searchResult.registry?.risk === "Low" ? "#22c55e"
+              : searchResult.registry?.risk === "High" ? "#ef4444" : "#f59e0b";
+            const riskLabel = searchResult.registry?.risk || "Unknown";
+            const scoreColor = (searchResult.safetyScore ?? 0) >= 65 ? "#22c55e"
+              : (searchResult.safetyScore ?? 0) >= 35 ? "#f59e0b" : "#ef4444";
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {/* Safety Score */}
+                <div style={{
+                  background: "#111",
+                  borderRadius: "12px",
+                  padding: "16px",
+                  border: `1px solid ${scoreColor}33`,
+                  textAlign: "center",
                 }}>
-                  {searchResult.isVerified ? "✓ Verified" : "✗ Unverified"}
-                </span>
-              </div>
-              <div style={{ fontSize: "11px", color: "#666", wordBreak: "break-all" }}>
-                {searchResult.address}
-              </div>
-              {searchResult.compiler !== "Unknown" && (
-                <div style={{ fontSize: "11px", color: "#555", marginTop: "8px" }}>
-                  Compiler: {searchResult.compiler}
+                  <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px", letterSpacing: "0.5px" }}>SAFETY SCORE</div>
+                  <div style={{ fontSize: "32px", fontWeight: "700", color: scoreColor }}>
+                    {searchResult.safetyScore ?? 0}<span style={{ fontSize: "16px", color: "#555" }}>/100</span>
+                  </div>
                 </div>
-              )}
-              <button
-                onClick={() => {
-                  setTab("submit");
-                  setSubmitForm({ ...submitForm, target: searchResult.address });
-                }}
-                style={{
-                  marginTop: "12px",
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "8px",
-                  border: "1px solid #2563eb",
-                  background: "transparent",
-                  color: "#2563eb",
-                  fontSize: "12px",
-                  cursor: "pointer",
-                }}
-              >
-                Report a Finding for this Contract
-              </button>
-            </div>
-          )}
+
+                {/* Profile Card */}
+                <div style={{
+                  background: "#111",
+                  borderRadius: "12px",
+                  padding: "16px",
+                  border: `1px solid ${searchResult.isVerified ? "#22c55e33" : "#ef444433"}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "600" }}>
+                      {searchResult.contractName}
+                    </span>
+                    <span style={{
+                      fontSize: "11px",
+                      padding: "2px 8px",
+                      borderRadius: "20px",
+                      background: searchResult.isVerified ? "#22c55e22" : "#ef444422",
+                      color: searchResult.isVerified ? "#22c55e" : "#ef4444",
+                    }}>
+                      {searchResult.isVerified ? "✓ Verified" : "✗ Unverified"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#666", wordBreak: "break-all", marginBottom: "10px" }}>
+                    {searchResult.address}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+                    {searchResult.registry && (
+                      <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: "#2563eb22", color: "#2563eb" }}>
+                        {searchResult.registry.category}
+                      </span>
+                    )}
+                    <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: `${riskColor}22`, color: riskColor }}>
+                      Risk: {riskLabel}
+                    </span>
+                  </div>
+
+                  {searchResult.registry && (
+                    <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
+                      <span style={{ color: "#666" }}>Audit:</span> {searchResult.registry.auditStatus}
+                    </div>
+                  )}
+                  {searchResult.compiler !== "Unknown" && (
+                    <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
+                      <span style={{ color: "#666" }}>Compiler:</span> {searchResult.compiler}
+                    </div>
+                  )}
+                  {searchResult.registry?.notes && (
+                    <div style={{ fontSize: "11px", color: "#555", marginTop: "6px", fontStyle: "italic" }}>
+                      {searchResult.registry.notes}
+                    </div>
+                  )}
+                </div>
+
+                {/* Red Flags */}
+                {searchResult.redFlags && searchResult.redFlags.length > 0 ? (
+                  <div style={{
+                    background: "#111",
+                    borderRadius: "12px",
+                    padding: "12px 16px",
+                    border: "1px solid #ef444433",
+                  }}>
+                    <div style={{ fontSize: "11px", color: "#ef4444", marginBottom: "6px", fontWeight: "600" }}>RED FLAGS</div>
+                    {searchResult.redFlags.map((f, i) => (
+                      <div key={i} style={{ fontSize: "12px", color: "#999", marginBottom: "4px" }}>
+                        ⚠ {f}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    background: "#111",
+                    borderRadius: "12px",
+                    padding: "12px 16px",
+                    border: "1px solid #22c55e33",
+                  }}>
+                    <div style={{ fontSize: "12px", color: "#22c55e" }}>No major red flags indexed.</div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {searchResult.registry?.reportUrl && (
+                    <a
+                      href={searchResult.registry.reportUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        flex: 1,
+                        padding: "8px",
+                        borderRadius: "8px",
+                        border: "1px solid #333",
+                        background: "transparent",
+                        color: "#aaa",
+                        fontSize: "12px",
+                        textAlign: "center",
+                        textDecoration: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      View Report / Source
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      setTab("submit");
+                      setSubmitForm({ ...submitForm, target: searchResult.address });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      borderRadius: "8px",
+                      border: "1px solid #2563eb",
+                      background: "transparent",
+                      color: "#2563eb",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Report a Finding
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {searchResult?.error && (
             <div style={{
@@ -278,42 +382,51 @@ export default function App() {
             </div>
           )}
 
-          {/* Featured — Base Azul */}
+          {/* Indexed Security Reports */}
           <div style={{ marginTop: "20px" }}>
             <p style={{ fontSize: "12px", color: "#444", marginBottom: "8px" }}>
-              RECENT AUDITS
+              INDEXED SECURITY REPORTS
             </p>
-            <div
-              onClick={() => {
-                setSearchAddress("0xD060A6B3f065216c1D92B3F29ef67D65eCe06567");
-              }}
-              style={{
-                background: "#111",
-                borderRadius: "12px",
-                padding: "12px 16px",
-                border: "1px solid #1e3a5f",
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: "600" }}>Base Azul Challenger</div>
-                <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>
-                  base/base v0.8.0-rc.24
-                </div>
-              </div>
-              <span style={{
-                fontSize: "11px",
-                padding: "2px 8px",
-                borderRadius: "20px",
-                background: "#ef444422",
-                color: "#ef4444",
-              }}>
-                1 Critical
-              </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {Object.entries(auditRegistry).map(([addr, entry]) => {
+                const riskColor = entry.risk === "Low" ? "#22c55e" : entry.risk === "High" ? "#ef4444" : "#f59e0b";
+                return (
+                  <div
+                    key={addr}
+                    onClick={() => setSearchAddress(addr)}
+                    style={{
+                      background: "#111",
+                      borderRadius: "12px",
+                      padding: "12px 16px",
+                      border: "1px solid #1e3a5f",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: "600" }}>{entry.displayName}</div>
+                      <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>
+                        {entry.category}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: "11px",
+                      padding: "2px 8px",
+                      borderRadius: "20px",
+                      background: `${riskColor}22`,
+                      color: riskColor,
+                    }}>
+                      {entry.risk}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
+            <p style={{ fontSize: "11px", color: "#333", marginTop: "10px", textAlign: "center" }}>
+              Lightweight security registry for Base contracts.
+            </p>
           </div>
         </div>
       )}
