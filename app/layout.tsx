@@ -7,19 +7,22 @@ import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
+    metadataBase: new URL("https://base-audit-tracker.vercel.app"),
     title: minikitConfig.miniapp.name,
     description: minikitConfig.miniapp.description,
     openGraph: {
-      title: "Base Audit Tracker",
-      description: "Audit registry for Base contracts",
-      url: "https://base-audit-tracker.vercel.app",
+      title: minikitConfig.miniapp.ogTitle,
+      description: minikitConfig.miniapp.ogDescription,
+      url: minikitConfig.miniapp.homeUrl,
+      siteName: minikitConfig.miniapp.name,
       images: [
         {
-          url: "https://base-audit-tracker.vercel.app/icon.png",
+          url: minikitConfig.miniapp.ogImageUrl,
           width: 1200,
           height: 630,
         },
       ],
+      type: "website",
     },
     other: {
       "base:app_id": "69ef6ad67e92b7a4af93efb0",
