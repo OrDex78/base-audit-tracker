@@ -456,8 +456,8 @@ export default function App() {
                   }}>
                     <div style={{ fontSize: "11px", color: "#22c55e", marginBottom: "6px", fontWeight: "600" }}>POSITIVE SIGNALS</div>
                     {searchResult.positiveSignals.map((s: string, i: number) => (
-                      <div key={i} style={{ fontSize: "12px", color: "#888", marginBottom: "3px" }}>
-                        \u2713 {s}
+                      <div key={i} style={{ fontSize: "12px", color: "#888", marginBottom: "3px", display: "flex", gap: "6px", alignItems: "center" }}>
+                        <span style={{ fontSize: "9px", fontWeight: "700", color: "#22c55e", background: "#22c55e22", padding: "1px 5px", borderRadius: "4px" }}>OK</span> {s}
                       </div>
                     ))}
                   </div>
@@ -473,8 +473,8 @@ export default function App() {
                   }}>
                     <div style={{ fontSize: "11px", color: "#ef4444", marginBottom: "6px", fontWeight: "600" }}>WARNING SIGNALS</div>
                     {searchResult.warningSignals.map((s: string, i: number) => (
-                      <div key={i} style={{ fontSize: "12px", color: "#999", marginBottom: "3px" }}>
-                        \u26a0 {s}
+                      <div key={i} style={{ fontSize: "12px", color: "#999", marginBottom: "3px", display: "flex", gap: "6px", alignItems: "center" }}>
+                        <span style={{ fontSize: "9px", fontWeight: "700", color: "#ef4444", background: "#ef444422", padding: "1px 5px", borderRadius: "4px" }}>WARN</span> {s}
                       </div>
                     ))}
                   </div>
