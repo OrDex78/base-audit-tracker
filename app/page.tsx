@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { keccak256, toBytes } from "viem";
-import { lookupRegistry, computeSafetyScore, getRedFlags, auditRegistry } from "@/lib/auditRegistry";
+import { lookupRegistry, auditRegistry } from "@/lib/auditRegistry";
 import type { RegistryEntry } from "@/lib/auditRegistry";
+import { computeRiskSignals } from "@/lib/riskSignals";
+import type { TokenSecurity } from "@/lib/riskSignals";
 
 const CONTRACT_ADDRESS = "0xD060A6B3f065216c1D92B3F29ef67D65eCe06567";
 const CONTRACT_ABI = [
@@ -46,8 +48,12 @@ interface SearchResult {
   compiler?: string;
   error?: boolean;
   registry?: RegistryEntry | null;
-  safetyScore?: number;
-  redFlags?: string[];
+  goplus?: TokenSecurity | null;
+  riskScore?: number;
+  riskLabel?: string;
+  confidence?: "High" | "Medium" | "Low";
+  positiveSignals?: string[];
+  warningSignals?: string[];
 }
 
 export default function App() {
@@ -94,23 +100,33 @@ export default function App() {
     setSearching(true);
     setSearchResult(null);
     try {
-      const res = await fetch(
-        `/api/check-contract?address=${target}`
-      );
-      const data = await res.json();
-      if (data.error) {
+      const [ethRes, gpRes] = await Promise.allSettled([
+        fetch(`/api/check-contract?address=${target}`).then(r => r.json()),
+        fetch(`/api/token-security?address=${target}`).then(r => r.json()),
+      ]);
+
+      const ethData = ethRes.status === "fulfilled" ? ethRes.value : null;
+      const gpData = gpRes.status === "fulfilled" && !gpRes.value.error ? gpRes.value as TokenSecurity : null;
+
+      if (!ethData || ethData.error) {
         setSearchResult({ address: target, error: true });
       } else {
-        const reg = lookupRegistry(data.address);
-        const verified = !!data.isVerified;
+        const reg = lookupRegistry(ethData.address);
+        const verified = !!ethData.isVerified;
+        const compiler = ethData.compiler || "Unknown";
+        const signals = computeRiskSignals(verified, compiler, reg, gpData);
         setSearchResult({
-          address: data.address,
+          address: ethData.address,
           isVerified: verified,
-          contractName: reg?.displayName || data.contractName || "Unknown",
-          compiler: data.compiler || "Unknown",
+          contractName: reg?.displayName || ethData.contractName || "Unknown",
+          compiler,
           registry: reg,
-          safetyScore: computeSafetyScore(verified, reg),
-          redFlags: getRedFlags(verified, reg),
+          goplus: gpData,
+          riskScore: signals.score,
+          riskLabel: signals.label,
+          confidence: signals.confidence,
+          positiveSignals: signals.positiveSignals,
+          warningSignals: signals.warningSignals,
         });
       }
     } catch {
@@ -126,12 +142,6 @@ export default function App() {
     { label: "Aerodrome Router", address: "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43" },
     { label: "BugRegistry", address: "0xD060A6B3f065216c1D92B3F29ef67D65eCe06567" },
   ];
-
-  const getScoreMicrocopy = (result: SearchResult) => {
-    if (result.registry) return "This contract has an indexed security profile.";
-    if (result.isVerified) return "Verified source does not mean audited.";
-    return "Unverified contracts are harder to review.";
-  };
 
   const handleSubmit = () => {
     if (!submitForm.target || !submitForm.description) return;
@@ -163,7 +173,7 @@ export default function App() {
           Base Audit Tracker
         </h1>
         <p style={{ fontSize: "12px", color: "#666", margin: 0 }}>
-          Check Base contract risk and timestamp findings onchain
+          Check Base contract risk signals and timestamp findings onchain
         </p>
       </div>
 
@@ -209,9 +219,9 @@ export default function App() {
             marginBottom: "14px",
             border: "1px solid #1e3a5f",
           }}>
-            <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>Base Contract Safety Profile</div>
+            <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>Base Contract Risk Signal Report</div>
             <div style={{ fontSize: "11px", color: "#666", lineHeight: "1.5" }}>
-              Paste any Base contract to check source verification, indexed security records, risk level, and onchain finding history.
+              Paste any Base contract to check source verification, GoPlus token signals, indexed security records, and risk level.
             </div>
           </div>
 
@@ -332,17 +342,20 @@ export default function App() {
               : searchResult.registry?.risk === "High" ? "#ef4444"
               : hasRegistry ? "#f59e0b" : "#666";
             const riskLabel = searchResult.registry?.risk || "Unknown";
-            const scoreColor = (searchResult.safetyScore ?? 0) >= 65 ? "#22c55e"
-              : (searchResult.safetyScore ?? 0) >= 35 ? "#f59e0b" : "#ef4444";
+            const score = searchResult.riskScore ?? 0;
+            const scoreColor = score >= 65 ? "#22c55e" : score >= 35 ? "#f59e0b" : "#ef4444";
             const categoryLabel = searchResult.registry?.category || "Unknown";
             const auditLabel = searchResult.registry?.auditStatus || "No indexed audit";
+            const confColor = searchResult.confidence === "High" ? "#22c55e"
+              : searchResult.confidence === "Medium" ? "#f59e0b" : "#666";
             const notesLabel = searchResult.registry?.notes
               || (searchResult.isVerified
                 ? "This contract is verified on Base, but this app has not indexed a public audit or security profile for it yet."
                 : undefined);
+            const hasTax = searchResult.goplus?.buyTax || searchResult.goplus?.sellTax;
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {/* Safety Score */}
+                {/* Risk Signal Score */}
                 <div style={{
                   background: "#111",
                   borderRadius: "12px",
@@ -350,12 +363,20 @@ export default function App() {
                   border: `1px solid ${scoreColor}33`,
                   textAlign: "center",
                 }}>
-                  <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px", letterSpacing: "0.5px" }}>SAFETY SCORE</div>
+                  <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px", letterSpacing: "0.5px" }}>RISK SIGNAL SCORE</div>
                   <div style={{ fontSize: "32px", fontWeight: "700", color: scoreColor }}>
-                    {searchResult.safetyScore ?? 0}<span style={{ fontSize: "16px", color: "#555" }}>/100</span>
+                    {score}<span style={{ fontSize: "16px", color: "#555" }}>/100</span>
                   </div>
-                  <div style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>
-                    {getScoreMicrocopy(searchResult)}
+                  <div style={{ fontSize: "11px", color: "#555", marginTop: "4px" }}>
+                    {searchResult.riskLabel}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "8px" }}>
+                    <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "20px", background: `${confColor}22`, color: confColor }}>
+                      Confidence: {searchResult.confidence}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#444", marginTop: "8px", fontStyle: "italic" }}>
+                    Based on indexed public signals. Not a full audit.
                   </div>
                 </div>
 
@@ -377,7 +398,7 @@ export default function App() {
                       background: searchResult.isVerified ? "#22c55e22" : "#ef444422",
                       color: searchResult.isVerified ? "#22c55e" : "#ef4444",
                     }}>
-                      {searchResult.isVerified ? "✓ Verified" : "✗ Unverified"}
+                      {searchResult.isVerified ? "\u2713 Verified" : "\u2717 Unverified"}
                     </span>
                   </div>
                   <div style={{ fontSize: "11px", color: "#666", wordBreak: "break-all", marginBottom: "10px" }}>
@@ -391,6 +412,9 @@ export default function App() {
                     <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: `${riskColor}22`, color: riskColor }}>
                       Risk: {riskLabel}
                     </span>
+                    <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: searchResult.goplus?.available ? "#22c55e22" : "#66666622", color: searchResult.goplus?.available ? "#22c55e" : "#666" }}>
+                      GoPlus: {searchResult.goplus?.available ? "Available" : "Unavailable"}
+                    </span>
                   </div>
 
                   <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
@@ -401,6 +425,20 @@ export default function App() {
                       <span style={{ color: "#666" }}>Compiler:</span> {searchResult.compiler}
                     </div>
                   )}
+                  {hasTax && (
+                    <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+                      {searchResult.goplus?.buyTax && (
+                        <div style={{ fontSize: "11px", color: "#555" }}>
+                          <span style={{ color: "#666" }}>Buy tax:</span> {(parseFloat(searchResult.goplus.buyTax) * 100).toFixed(1)}%
+                        </div>
+                      )}
+                      {searchResult.goplus?.sellTax && (
+                        <div style={{ fontSize: "11px", color: "#555" }}>
+                          <span style={{ color: "#666" }}>Sell tax:</span> {(parseFloat(searchResult.goplus.sellTax) * 100).toFixed(1)}%
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {notesLabel && (
                     <div style={{ fontSize: "11px", color: "#555", marginTop: "6px", fontStyle: "italic" }}>
                       {notesLabel}
@@ -408,18 +446,35 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Red Flags */}
-                {searchResult.redFlags && searchResult.redFlags.length > 0 ? (
+                {/* Positive Signals */}
+                {searchResult.positiveSignals && searchResult.positiveSignals.length > 0 && (
+                  <div style={{
+                    background: "#111",
+                    borderRadius: "12px",
+                    padding: "12px 16px",
+                    border: "1px solid #22c55e33",
+                  }}>
+                    <div style={{ fontSize: "11px", color: "#22c55e", marginBottom: "6px", fontWeight: "600" }}>POSITIVE SIGNALS</div>
+                    {searchResult.positiveSignals.map((s: string, i: number) => (
+                      <div key={i} style={{ fontSize: "12px", color: "#888", marginBottom: "3px" }}>
+                        \u2713 {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Warning Signals */}
+                {searchResult.warningSignals && searchResult.warningSignals.length > 0 ? (
                   <div style={{
                     background: "#111",
                     borderRadius: "12px",
                     padding: "12px 16px",
                     border: "1px solid #ef444433",
                   }}>
-                    <div style={{ fontSize: "11px", color: "#ef4444", marginBottom: "6px", fontWeight: "600" }}>RED FLAGS</div>
-                    {searchResult.redFlags.map((f, i) => (
-                      <div key={i} style={{ fontSize: "12px", color: "#999", marginBottom: "4px" }}>
-                        ⚠ {f}
+                    <div style={{ fontSize: "11px", color: "#ef4444", marginBottom: "6px", fontWeight: "600" }}>WARNING SIGNALS</div>
+                    {searchResult.warningSignals.map((s: string, i: number) => (
+                      <div key={i} style={{ fontSize: "12px", color: "#999", marginBottom: "3px" }}>
+                        \u26a0 {s}
                       </div>
                     ))}
                   </div>
@@ -430,7 +485,7 @@ export default function App() {
                     padding: "12px 16px",
                     border: "1px solid #22c55e33",
                   }}>
-                    <div style={{ fontSize: "12px", color: "#22c55e" }}>No major red flags indexed.</div>
+                    <div style={{ fontSize: "12px", color: "#22c55e" }}>No major warnings found in indexed public signals.</div>
                   </div>
                 )}
 
