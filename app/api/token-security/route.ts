@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
       isWhitelisted: toBool(r.is_whitelisted),
       holderCount: r.holder_count ?? null,
       lpHolderCount: r.lp_holder_count ?? null,
+      tokenName: r.token_name ?? null,
+      tokenSymbol: r.token_symbol ?? null,
     });
   } catch {
     return NextResponse.json(

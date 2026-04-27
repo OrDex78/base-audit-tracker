@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
         isVerified: false,
         contractName: "Unknown",
         compiler: "Unknown",
+        _debug: data.message || data.result || undefined,
       });
     }
 

@@ -19,6 +19,8 @@ export interface TokenSecurity {
   isWhitelisted?: boolean | null;
   holderCount?: string | null;
   lpHolderCount?: string | null;
+  tokenName?: string | null;
+  tokenSymbol?: string | null;
 }
 
 export interface RiskSignalResult {

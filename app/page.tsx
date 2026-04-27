@@ -105,20 +105,37 @@ export default function App() {
         fetch(`/api/token-security?address=${target}`).then(r => r.json()),
       ]);
 
-      const ethData = ethRes.status === "fulfilled" ? ethRes.value : null;
+      const ethOk = ethRes.status === "fulfilled" && !ethRes.value.error;
+      const ethData = ethOk ? ethRes.value : null;
       const gpData = gpRes.status === "fulfilled" && !gpRes.value.error ? gpRes.value as TokenSecurity : null;
 
-      if (!ethData || ethData.error) {
+      const reg = lookupRegistry(target);
+
+      // If both APIs failed and no registry, show error
+      if (!ethData && !gpData && !reg) {
         setSearchResult({ address: target, error: true });
       } else {
-        const reg = lookupRegistry(ethData.address);
-        const verified = !!ethData.isVerified;
-        const compiler = ethData.compiler || "Unknown";
+        const verified = ethData ? !!ethData.isVerified : false;
+        const compiler = ethData?.compiler || "Unavailable";
+        const contractName = reg?.displayName
+          || ethData?.contractName
+          || (gpData?.tokenName ? `${gpData.tokenName}${gpData.tokenSymbol ? ` (${gpData.tokenSymbol})` : ""}` : null)
+          || "Unknown Contract";
         const signals = computeRiskSignals(verified, compiler, reg, gpData);
+        if (!ethData) {
+          signals.warningSignals.push("Source verification unavailable");
+          signals.score = Math.max(0, signals.score - 5);
+          // Recalculate label
+          if (signals.score >= 80) signals.label = "Stronger public signals";
+          else if (signals.score >= 60) signals.label = "Moderate public signals";
+          else if (signals.score >= 40) signals.label = "Limited public signals";
+          else if (signals.score >= 20) signals.label = "Weak public signals";
+          else signals.label = "High-risk signals";
+        }
         setSearchResult({
-          address: ethData.address,
+          address: ethData?.address || target,
           isVerified: verified,
-          contractName: reg?.displayName || ethData.contractName || "Unknown",
+          contractName,
           compiler,
           registry: reg,
           goplus: gpData,
