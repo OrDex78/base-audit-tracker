@@ -87,17 +87,19 @@ export default function App() {
     if (isSuccess) setSubmitted(true);
   }, [isSuccess]);
 
-  const searchContract = async () => {
-    if (!searchAddress || searchAddress.length < 42) return;
+  const searchContract = async (addr?: string) => {
+    const target = addr || searchAddress;
+    if (!target || target.length < 42) return;
+    if (addr) setSearchAddress(addr);
     setSearching(true);
     setSearchResult(null);
     try {
       const res = await fetch(
-        `/api/check-contract?address=${searchAddress}`
+        `/api/check-contract?address=${target}`
       );
       const data = await res.json();
       if (data.error) {
-        setSearchResult({ address: searchAddress, error: true });
+        setSearchResult({ address: target, error: true });
       } else {
         const reg = lookupRegistry(data.address);
         const verified = !!data.isVerified;
@@ -112,9 +114,23 @@ export default function App() {
         });
       }
     } catch {
-      setSearchResult({ address: searchAddress, error: true });
+      setSearchResult({ address: target, error: true });
     }
     setSearching(false);
+  };
+
+  const registryCount = Object.keys(auditRegistry).length;
+
+  const EXAMPLE_CONTRACTS = [
+    { label: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+    { label: "Aerodrome Router", address: "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43" },
+    { label: "BugRegistry", address: "0xD060A6B3f065216c1D92B3F29ef67D65eCe06567" },
+  ];
+
+  const getScoreMicrocopy = (result: SearchResult) => {
+    if (result.registry) return "This contract has an indexed security profile.";
+    if (result.isVerified) return "Verified source does not mean audited.";
+    return "Unverified contracts are harder to review.";
   };
 
   const handleSubmit = () => {
@@ -185,6 +201,20 @@ export default function App() {
       {/* Search Tab */}
       {tab === "search" && (
         <div>
+          {/* Intro Panel */}
+          <div style={{
+            background: "#111",
+            borderRadius: "12px",
+            padding: "14px 16px",
+            marginBottom: "14px",
+            border: "1px solid #1e3a5f",
+          }}>
+            <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "4px" }}>Base Contract Safety Profile</div>
+            <div style={{ fontSize: "11px", color: "#666", lineHeight: "1.5" }}>
+              Paste any Base contract to check source verification, indexed security records, risk level, and onchain finding history.
+            </div>
+          </div>
+
           <div style={{ marginBottom: "12px" }}>
             <input
               value={searchAddress}
@@ -203,7 +233,7 @@ export default function App() {
             />
           </div>
           <button
-            onClick={searchContract}
+            onClick={() => searchContract()}
             disabled={searching}
             style={{
               width: "100%",
@@ -221,12 +251,95 @@ export default function App() {
             {searching ? "Searching..." : "Check Contract"}
           </button>
 
+          {/* Example buttons — show when no result */}
+          {!searchResult && !searching && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ fontSize: "11px", color: "#444", marginBottom: "8px" }}>TRY AN EXAMPLE</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {EXAMPLE_CONTRACTS.map((ex) => (
+                  <button
+                    key={ex.label}
+                    onClick={() => searchContract(ex.address)}
+                    style={{
+                      flex: 1,
+                      padding: "8px 4px",
+                      borderRadius: "8px",
+                      border: "1px solid #222",
+                      background: "#111",
+                      color: "#888",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {ex.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Indexed Security Reports — show above when no result */}
+          {!searchResult && !searching && (
+            <div style={{ marginBottom: "16px" }}>
+              <p style={{ fontSize: "12px", color: "#444", marginBottom: "8px" }}>
+                INDEXED SECURITY REPORTS ({registryCount})
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {Object.entries(auditRegistry).map(([addr, entry]) => {
+                  const rc = entry.risk === "Low" ? "#22c55e" : entry.risk === "High" ? "#ef4444" : "#f59e0b";
+                  return (
+                    <div
+                      key={addr}
+                      onClick={() => searchContract(addr)}
+                      style={{
+                        background: "#111",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                        border: "1px solid #1e3a5f",
+                        cursor: "pointer",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: "600" }}>{entry.displayName}</div>
+                        <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>{entry.category}</div>
+                      </div>
+                      <span style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "20px",
+                        background: `${rc}22`,
+                        color: rc,
+                      }}>
+                        {entry.risk}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: "11px", color: "#333", marginTop: "10px", textAlign: "center" }}>
+                Lightweight security registry for Base contracts.
+              </p>
+            </div>
+          )}
+
           {searchResult && !searchResult.error && (() => {
+            const hasRegistry = !!searchResult.registry;
             const riskColor = searchResult.registry?.risk === "Low" ? "#22c55e"
-              : searchResult.registry?.risk === "High" ? "#ef4444" : "#f59e0b";
+              : searchResult.registry?.risk === "High" ? "#ef4444"
+              : hasRegistry ? "#f59e0b" : "#666";
             const riskLabel = searchResult.registry?.risk || "Unknown";
             const scoreColor = (searchResult.safetyScore ?? 0) >= 65 ? "#22c55e"
               : (searchResult.safetyScore ?? 0) >= 35 ? "#f59e0b" : "#ef4444";
+            const categoryLabel = searchResult.registry?.category || "Unknown";
+            const auditLabel = searchResult.registry?.auditStatus || "No indexed audit";
+            const notesLabel = searchResult.registry?.notes
+              || (searchResult.isVerified
+                ? "This contract is verified on Base, but this app has not indexed a public audit or security profile for it yet."
+                : undefined);
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {/* Safety Score */}
@@ -240,6 +353,9 @@ export default function App() {
                   <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px", letterSpacing: "0.5px" }}>SAFETY SCORE</div>
                   <div style={{ fontSize: "32px", fontWeight: "700", color: scoreColor }}>
                     {searchResult.safetyScore ?? 0}<span style={{ fontSize: "16px", color: "#555" }}>/100</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>
+                    {getScoreMicrocopy(searchResult)}
                   </div>
                 </div>
 
@@ -269,29 +385,25 @@ export default function App() {
                   </div>
 
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
-                    {searchResult.registry && (
-                      <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: "#2563eb22", color: "#2563eb" }}>
-                        {searchResult.registry.category}
-                      </span>
-                    )}
+                    <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: "#2563eb22", color: "#2563eb" }}>
+                      {categoryLabel}
+                    </span>
                     <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "20px", background: `${riskColor}22`, color: riskColor }}>
                       Risk: {riskLabel}
                     </span>
                   </div>
 
-                  {searchResult.registry && (
-                    <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
-                      <span style={{ color: "#666" }}>Audit:</span> {searchResult.registry.auditStatus}
-                    </div>
-                  )}
+                  <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
+                    <span style={{ color: "#666" }}>Audit:</span> {auditLabel}
+                  </div>
                   {searchResult.compiler !== "Unknown" && (
                     <div style={{ fontSize: "11px", color: "#555", marginBottom: "4px" }}>
                       <span style={{ color: "#666" }}>Compiler:</span> {searchResult.compiler}
                     </div>
                   )}
-                  {searchResult.registry?.notes && (
+                  {notesLabel && (
                     <div style={{ fontSize: "11px", color: "#555", marginTop: "6px", fontStyle: "italic" }}>
-                      {searchResult.registry.notes}
+                      {notesLabel}
                     </div>
                   )}
                 </div>
@@ -364,6 +476,48 @@ export default function App() {
                     Report a Finding
                   </button>
                 </div>
+
+                {/* Indexed Security Reports — below result */}
+                <div style={{ marginTop: "10px" }}>
+                  <p style={{ fontSize: "12px", color: "#444", marginBottom: "8px" }}>
+                    INDEXED SECURITY REPORTS ({registryCount})
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {Object.entries(auditRegistry).map(([addr, entry]) => {
+                      const rc = entry.risk === "Low" ? "#22c55e" : entry.risk === "High" ? "#ef4444" : "#f59e0b";
+                      return (
+                        <div
+                          key={addr}
+                          onClick={() => searchContract(addr)}
+                          style={{
+                            background: "#111",
+                            borderRadius: "12px",
+                            padding: "12px 16px",
+                            border: "1px solid #1e3a5f",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: "600" }}>{entry.displayName}</div>
+                            <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>{entry.category}</div>
+                          </div>
+                          <span style={{
+                            fontSize: "11px",
+                            padding: "2px 8px",
+                            borderRadius: "20px",
+                            background: `${rc}22`,
+                            color: rc,
+                          }}>
+                            {entry.risk}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             );
           })()}
@@ -381,53 +535,6 @@ export default function App() {
               Could not fetch contract data. Check the address and try again.
             </div>
           )}
-
-          {/* Indexed Security Reports */}
-          <div style={{ marginTop: "20px" }}>
-            <p style={{ fontSize: "12px", color: "#444", marginBottom: "8px" }}>
-              INDEXED SECURITY REPORTS
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {Object.entries(auditRegistry).map(([addr, entry]) => {
-                const riskColor = entry.risk === "Low" ? "#22c55e" : entry.risk === "High" ? "#ef4444" : "#f59e0b";
-                return (
-                  <div
-                    key={addr}
-                    onClick={() => setSearchAddress(addr)}
-                    style={{
-                      background: "#111",
-                      borderRadius: "12px",
-                      padding: "12px 16px",
-                      border: "1px solid #1e3a5f",
-                      cursor: "pointer",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: "600" }}>{entry.displayName}</div>
-                      <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>
-                        {entry.category}
-                      </div>
-                    </div>
-                    <span style={{
-                      fontSize: "11px",
-                      padding: "2px 8px",
-                      borderRadius: "20px",
-                      background: `${riskColor}22`,
-                      color: riskColor,
-                    }}>
-                      {entry.risk}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: "11px", color: "#333", marginTop: "10px", textAlign: "center" }}>
-              Lightweight security registry for Base contracts.
-            </p>
-          </div>
         </div>
       )}
 
