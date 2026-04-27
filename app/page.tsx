@@ -45,12 +45,6 @@ interface SearchResult {
   error?: boolean;
 }
 
-interface SubmitForm {
-  target: string;
-  description: string;
-  severity: number;
-}
-
 export default function App() {
   const { setFrameReady, isFrameReady } = useMiniKit();
   const { address, isConnected } = useAccount();
@@ -60,7 +54,7 @@ export default function App() {
   const [searchAddress, setSearchAddress] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
-  const [submitForm, setSubmitForm] = useState({
+  const [submitForm, setSubmitForm] = useState<{target: string; description: string; severity: number}>({
     target: "",
     description: "",
     severity: 2,
