@@ -10,7 +10,13 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const apiKey = "J9SXHRW4M357AWI72YH878KIQQRXECP4VE"; // TODO: move to env var
+  const apiKey = process.env.BASESCAN_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: true, message: "Missing BASESCAN_API_KEY" },
+      { status: 500 }
+    );
+  }
   const url = `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`;
 
   try {
