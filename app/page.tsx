@@ -59,7 +59,7 @@ interface SearchResult {
 export default function App() {
   const { setFrameReady, isFrameReady } = useMiniKit();
   const { address, isConnected } = useAccount();
-  const { writeContract, isPending, isSuccess } = useWriteContract();
+  const { writeContract, data: writeHash, isPending, isSuccess } = useWriteContract();
 
   const [tab, setTab] = useState<"search" | "submit" | "leaderboard">("search");
   const [searchAddress, setSearchAddress] = useState("");
@@ -71,6 +71,13 @@ export default function App() {
     severity: 2,
   });
   const [submitted, setSubmitted] = useState(false);
+  // Timestamp form state
+  const [targetAddress, setTargetAddress] = useState("");
+  const [findingTitle, setFindingTitle] = useState("");
+  const [privateNotes, setPrivateNotes] = useState("");
+  const [generatedHash, setGeneratedHash] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
+  const [txHash, setTxHash] = useState("");
 
   const { data: totalFindings } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -90,8 +97,11 @@ export default function App() {
   }, [setFrameReady, isFrameReady]);
 
   useEffect(() => {
-    if (isSuccess) setSubmitted(true);
-  }, [isSuccess]);
+    if (isSuccess) {
+      setSubmitted(true);
+      if (writeHash) setTxHash(writeHash);
+    }
+  }, [isSuccess, writeHash]);
 
   const searchContract = async (addr?: string) => {
     const target = addr || searchAddress;
@@ -173,6 +183,44 @@ export default function App() {
     });
   };
 
+  const generateHash = () => {
+    const trimmedTitle = findingTitle.trim();
+    const trimmedNotes = privateNotes.trim();
+    if (!targetAddress || !trimmedTitle || !trimmedNotes) {
+      alert("Please fill in all fields before generating hash");
+      return;
+    }
+    if (!/^0x[a-fA-F0-9]{40}$/.test(targetAddress)) {
+      alert("Invalid contract address");
+      return;
+    }
+    const hashInput = `${targetAddress.toLowerCase()}|${submitForm.severity}|${trimmedTitle}|${trimmedNotes}`;
+    const hash = keccak256(toBytes(hashInput));
+    setGeneratedHash(hash);
+    setCopyStatus("");
+  };
+
+  const copyHash = async () => {
+    if (!generatedHash) return;
+    try {
+      await navigator.clipboard.writeText(generatedHash);
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus(""), 2000);
+    } catch {
+      setCopyStatus("Failed");
+    }
+  };
+
+  const submitGeneratedHash = () => {
+    if (!isConnected || !generatedHash || !/^0x[a-fA-F0-9]{40}$/.test(targetAddress)) return;
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: "submitFinding",
+      args: [generatedHash as `0x${string}`, submitForm.severity, targetAddress],
+    });
+  };
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -220,7 +268,7 @@ export default function App() {
               transition: "all 0.2s",
             }}
           >
-            {t === "search" ? "🔍 Search" : t === "submit" ? "📝 Submit" : "🏆 Stats"}
+            {t === "search" ? "🔍 Search" : t === "submit" ? "⏱️ Timestamp" : "🏆 Stats"}
           </button>
         ))}
       </div>
@@ -533,6 +581,9 @@ export default function App() {
                     onClick={() => {
                       setTab("submit");
                       setSubmitForm({ ...submitForm, target: searchResult.address });
+                      setTargetAddress(searchResult.address);
+                      setGeneratedHash("");
+                      setSubmitted(false);
                     }}
                     style={{
                       flex: 1,
@@ -613,27 +664,59 @@ export default function App() {
       {/* Submit Tab */}
       {tab === "submit" && (
         <div>
-          {!isConnected ? (
-            <div style={{
-              textAlign: "center",
-              padding: "40px 20px",
-              color: "#555",
-            }}>
-              <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔒</div>
-              <p>Connect your wallet to submit findings</p>
+          <div style={{
+            background: "#111",
+            borderRadius: "12px",
+            padding: "16px",
+            marginBottom: "16px",
+            border: "1px solid #1e3a5f",
+          }}>
+            <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>Timestamp a Finding</div>
+            <div style={{ fontSize: "11px", color: "#666", lineHeight: "1.5", marginBottom: "8px" }}>
+              Create onchain proof that you had a security finding at this time. The app hashes your details locally and submits only the hash.
             </div>
-          ) : submitted ? (
+            <div style={{ fontSize: "10px", color: "#444", fontStyle: "italic" }}>
+              This does not submit to a bug bounty. Do not publish sensitive details until responsible disclosure is complete.
+            </div>
+          </div>
+
+          {submitted ? (
             <div style={{
               textAlign: "center",
               padding: "40px 20px",
             }}>
-              <div style={{ fontSize: "40px", marginBottom: "12px" }}>✅</div>
-              <h3 style={{ color: "#22c55e", marginBottom: "8px" }}>Finding Submitted!</h3>
+              <div style={{ fontSize: "40px", marginBottom: "12px" }}>OK</div>
+              <h3 style={{ color: "#22c55e", marginBottom: "8px" }}>Timestamp Proof Created</h3>
               <p style={{ color: "#555", fontSize: "13px" }}>
-                Your finding is now permanently timestamped onchain.
+                Your finding hash is now permanently timestamped onchain.
               </p>
+              {txHash && (
+                <div style={{ marginTop: "12px" }}>
+                  <a
+                    href={`https://basescan.org/tx/${txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: "12px",
+                      color: "#2563eb",
+                      textDecoration: "none",
+                    }}
+                  >
+                    View on Basescan
+                  </a>
+                </div>
+              )}
               <button
-                onClick={() => { setSubmitted(false); setSubmitForm({ target: "", description: "", severity: 2 }); }}
+                onClick={() => {
+                  setSubmitted(false);
+                  setTargetAddress("");
+                  setFindingTitle("");
+                  setPrivateNotes("");
+                  setGeneratedHash("");
+                  setCopyStatus("");
+                  setTxHash("");
+                  setSubmitForm({ target: "", description: "", severity: 2 });
+                }}
                 style={{
                   marginTop: "16px",
                   padding: "10px 24px",
@@ -644,19 +727,22 @@ export default function App() {
                   cursor: "pointer",
                 }}
               >
-                Submit Another
+                Timestamp Another
               </button>
             </div>
           ) : (
             <div>
               <div style={{ marginBottom: "12px" }}>
                 <label style={{ fontSize: "12px", color: "#555", display: "block", marginBottom: "6px" }}>
-                  CONTRACT / PROTOCOL
+                  TARGET CONTRACT ADDRESS
                 </label>
                 <input
-                  value={submitForm.target}
-                  onChange={(e) => setSubmitForm({ ...submitForm, target: e.target.value })}
-                  placeholder="0x... or protocol name"
+                  value={targetAddress}
+                  onChange={(e) => {
+                    setTargetAddress(e.target.value);
+                    setGeneratedHash("");
+                  }}
+                  placeholder="0x..."
                   style={{
                     width: "100%",
                     padding: "12px",
@@ -678,7 +764,10 @@ export default function App() {
                   {SEVERITY_LABELS.map((label, i) => (
                     <button
                       key={i}
-                      onClick={() => setSubmitForm({ ...submitForm, severity: i })}
+                      onClick={() => {
+                        setSubmitForm({ ...submitForm, severity: i });
+                        setGeneratedHash("");
+                      }}
                       style={{
                         flex: 1,
                         padding: "8px 4px",
@@ -697,14 +786,41 @@ export default function App() {
                 </div>
               </div>
 
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ fontSize: "12px", color: "#555", display: "block", marginBottom: "6px" }}>
+                  FINDING TITLE
+                </label>
+                <input
+                  value={findingTitle}
+                  onChange={(e) => {
+                    setFindingTitle(e.target.value);
+                    setGeneratedHash("");
+                  }}
+                  placeholder="Brief title of the finding"
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "10px",
+                    border: "1px solid #222",
+                    background: "#111",
+                    color: "#fff",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ fontSize: "12px", color: "#555", display: "block", marginBottom: "6px" }}>
-                  DESCRIPTION (kept private — only hash stored onchain)
+                  PRIVATE NOTES
                 </label>
                 <textarea
-                  value={submitForm.description}
-                  onChange={(e) => setSubmitForm({ ...submitForm, description: e.target.value })}
-                  placeholder="Describe the vulnerability..."
+                  value={privateNotes}
+                  onChange={(e) => {
+                    setPrivateNotes(e.target.value);
+                    setGeneratedHash("");
+                  }}
+                  placeholder="Describe the issue privately. These notes are only used locally to generate a hash."
                   rows={4}
                   style={{
                     width: "100%",
@@ -720,34 +836,101 @@ export default function App() {
                 />
               </div>
 
-              <div style={{
-                background: "#111",
-                borderRadius: "10px",
-                padding: "12px",
-                marginBottom: "16px",
-                border: "1px solid #1e3a5f",
-                fontSize: "12px",
-                color: "#555",
-              }}>
-                🔐 Only a keccak256 hash of your finding is stored onchain. The description stays private until you choose to disclose it.
-              </div>
+              <button
+                onClick={generateHash}
+                disabled={!targetAddress || !findingTitle.trim() || !privateNotes.trim()}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: !targetAddress || !findingTitle.trim() || !privateNotes.trim() ? "#333" : "#2563eb",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: (!targetAddress || !findingTitle.trim() || !privateNotes.trim()) ? "not-allowed" : "pointer",
+                  marginBottom: "12px",
+                }}
+              >
+                Generate Hash
+              </button>
+
+              {generatedHash && (
+                <div style={{
+                  background: "#111",
+                  borderRadius: "10px",
+                  padding: "12px",
+                  marginBottom: "12px",
+                  border: "1px solid #1e3a5f",
+                }}>
+                  <div style={{ fontSize: "11px", color: "#555", marginBottom: "6px" }}>FINDING HASH</div>
+                  <div style={{
+                    fontSize: "10px",
+                    color: "#888",
+                    wordBreak: "break-all",
+                    marginBottom: "8px",
+                    fontFamily: "monospace",
+                  }}>
+                    {generatedHash}
+                  </div>
+                  <button
+                    onClick={copyHash}
+                    style={{
+                      width: "100%",
+                      padding: "6px",
+                      borderRadius: "6px",
+                      border: "1px solid #333",
+                      background: "transparent",
+                      color: "#888",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copyStatus || "Copy Hash"}
+                  </button>
+                  <div style={{ fontSize: "10px", color: "#444", marginTop: "8px", fontStyle: "italic" }}>
+                    Only this hash is submitted onchain. Your title and notes are not stored by this app.
+                  </div>
+                </div>
+              )}
+
+              {!isConnected && (
+                <div style={{
+                  background: "#111",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  marginBottom: "12px",
+                  border: "1px solid #333",
+                  color: "#777",
+                  fontSize: "11px",
+                  lineHeight: "1.4",
+                }}>
+                  Connect your wallet when you are ready to submit the generated hash onchain.
+                </div>
+              )}
 
               <button
-                onClick={handleSubmit}
-                disabled={isPending || !submitForm.target || !submitForm.description}
+                onClick={submitGeneratedHash}
+                disabled={!isConnected || !generatedHash || isPending}
                 style={{
                   width: "100%",
                   padding: "14px",
                   borderRadius: "10px",
                   border: "none",
-                  background: isPending ? "#1e3a5f" : "#2563eb",
+                  background: (!isConnected || !generatedHash || isPending) ? "#333" : "#2563eb",
                   color: "#fff",
                   fontSize: "14px",
                   fontWeight: "600",
-                  cursor: isPending ? "not-allowed" : "pointer",
+                  cursor: (!isConnected || !generatedHash || isPending) ? "not-allowed" : "pointer",
                 }}
               >
-                {isPending ? "Submitting..." : "Submit Finding Onchain"}
+                {!isConnected
+                  ? "Connect Wallet to Submit Onchain"
+                  : !generatedHash
+                    ? "Generate Hash First"
+                    : isPending
+                      ? "Submitting..."
+                      : "Submit Hash Onchain"}
               </button>
             </div>
           )}
