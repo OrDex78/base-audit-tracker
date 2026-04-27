@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const apiKey = process.env.BASESCAN_API_KEY || "";
+  const apiKey = "J9SXHRW4M357AWI72YH878KIQQRXECP4VE"; // TODO: move to env var
   const url = `https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=${address}&apikey=${apiKey}`;
 
   try {
