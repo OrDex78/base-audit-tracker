@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { ConnectWallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
+import { base } from "wagmi/chains";
 import { keccak256, toBytes } from "viem";
 import { lookupRegistry, auditRegistry } from "@/lib/auditRegistry";
 import type { RegistryEntry } from "@/lib/auditRegistry";
@@ -59,7 +60,7 @@ interface SearchResult {
 
 export default function App() {
   const { setFrameReady, isFrameReady } = useMiniKit();
-  const { address, isConnected } = useAccount();
+  const { address, chainId, isConnected } = useAccount();
   const { writeContract, data: writeHash, isPending, isSuccess } = useWriteContract();
 
   const [tab, setTab] = useState<"search" | "submit" | "leaderboard">("search");
@@ -213,11 +214,12 @@ export default function App() {
   };
 
   const submitGeneratedHash = () => {
-    if (!isConnected || !generatedHash || !/^0x[a-fA-F0-9]{40}$/.test(targetAddress)) return;
+    if (!isConnected || chainId !== base.id || !generatedHash || !/^0x[a-fA-F0-9]{40}$/.test(targetAddress)) return;
     writeContract({
       address: CONTRACT_ADDRESS,
       abi: CONTRACT_ABI,
       functionName: "submitFinding",
+      chainId: base.id,
       args: [generatedHash as `0x${string}`, submitForm.severity, targetAddress],
     });
   };
@@ -934,23 +936,40 @@ export default function App() {
                 </>
               )}
 
+              {isConnected && chainId !== base.id && (
+                <div style={{
+                  background: "#111",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  marginBottom: "12px",
+                  border: "1px solid #f59e0b55",
+                  color: "#f59e0b",
+                  fontSize: "11px",
+                  lineHeight: "1.4",
+                }}>
+                  Switch your wallet network to Base before submitting onchain.
+                </div>
+              )}
+
               <button
                 onClick={submitGeneratedHash}
-                disabled={!isConnected || !generatedHash || isPending}
+                disabled={!isConnected || chainId !== base.id || !generatedHash || isPending}
                 style={{
                   width: "100%",
                   padding: "14px",
                   borderRadius: "10px",
                   border: "none",
-                  background: (!isConnected || !generatedHash || isPending) ? "#333" : "#2563eb",
+                  background: (!isConnected || chainId !== base.id || !generatedHash || isPending) ? "#333" : "#2563eb",
                   color: "#fff",
                   fontSize: "14px",
                   fontWeight: "600",
-                  cursor: (!isConnected || !generatedHash || isPending) ? "not-allowed" : "pointer",
+                  cursor: (!isConnected || chainId !== base.id || !generatedHash || isPending) ? "not-allowed" : "pointer",
                 }}
               >
                 {!isConnected
                   ? "Connect Wallet to Submit Onchain"
+                  : chainId !== base.id
+                    ? "Switch to Base to Submit"
                   : !generatedHash
                     ? "Generate Hash First"
                     : isPending
