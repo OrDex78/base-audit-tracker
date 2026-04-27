@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
+import { ConnectWallet } from "@coinbase/onchainkit/wallet";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { keccak256, toBytes } from "viem";
 import { lookupRegistry, auditRegistry } from "@/lib/auditRegistry";
@@ -895,18 +896,42 @@ export default function App() {
               )}
 
               {!isConnected && (
-                <div style={{
-                  background: "#111",
-                  borderRadius: "10px",
-                  padding: "10px 12px",
-                  marginBottom: "12px",
-                  border: "1px solid #333",
-                  color: "#777",
-                  fontSize: "11px",
-                  lineHeight: "1.4",
-                }}>
-                  Connect your wallet when you are ready to submit the generated hash onchain.
-                </div>
+                <>
+                  <div style={{
+                    background: "#111",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    marginBottom: "10px",
+                    border: "1px solid #333",
+                    color: "#777",
+                    fontSize: "11px",
+                    lineHeight: "1.4",
+                  }}>
+                    Connect your wallet when you are ready to submit the generated hash onchain.
+                  </div>
+                  <ConnectWallet
+                    disconnectedLabel="Connect Wallet"
+                    render={({ label, onClick, isLoading }) => (
+                      <button
+                        onClick={onClick}
+                        style={{
+                          width: "100%",
+                          padding: "12px",
+                          borderRadius: "10px",
+                          border: "1px solid #2563eb",
+                          background: "transparent",
+                          color: "#2563eb",
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        {isLoading ? "Connecting..." : label}
+                      </button>
+                    )}
+                  />
+                </>
               )}
 
               <button
