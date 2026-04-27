@@ -44,7 +44,7 @@ export default function App() {
 
   const [tab, setTab] = useState<"search" | "submit" | "leaderboard">("search");
   const [searchAddress, setSearchAddress] = useState("");
-  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [submitForm, setSubmitForm] = useState({
     target: "",
