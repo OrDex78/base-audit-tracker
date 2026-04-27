@@ -88,17 +88,19 @@ export default function App() {
     setSearchResult(null);
     try {
       const res = await fetch(
-        `https://api.basescan.org/api?module=contract&action=getsourcecode&address=${searchAddress}&apikey=YourApiKeyToken`
+        `/api/check-contract?address=${searchAddress}`
       );
       const data = await res.json();
-      const isVerified =
-        data.result?.[0]?.SourceCode && data.result[0].SourceCode !== "";
-      setSearchResult({
-        address: searchAddress,
-        isVerified,
-        contractName: data.result?.[0]?.ContractName || "Unknown",
-        compiler: data.result?.[0]?.CompilerVersion || "Unknown",
-      });
+      if (data.error) {
+        setSearchResult({ address: searchAddress, error: true });
+      } else {
+        setSearchResult({
+          address: data.address,
+          isVerified: data.isVerified,
+          contractName: data.contractName || "Unknown",
+          compiler: data.compiler || "Unknown",
+        });
+      }
     } catch {
       setSearchResult({ address: searchAddress, error: true });
     }
