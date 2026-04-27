@@ -37,6 +37,20 @@ const CONTRACT_ABI = [
 const SEVERITY_LABELS = ["Low", "Medium", "High", "Critical"];
 const SEVERITY_COLORS = ["#22c55e", "#f59e0b", "#f97316", "#ef4444"];
 
+interface SearchResult {
+  address: string;
+  isVerified?: boolean;
+  contractName?: string;
+  compiler?: string;
+  error?: boolean;
+}
+
+interface SubmitForm {
+  target: string;
+  description: string;
+  severity: number;
+}
+
 export default function App() {
   const { setFrameReady, isFrameReady } = useMiniKit();
   const { address, isConnected } = useAccount();
