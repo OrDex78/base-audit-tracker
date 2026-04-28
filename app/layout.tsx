@@ -64,12 +64,6 @@ export default function RootLayout({
   return (
     <RootProvider>
       <html lang="en">
-        <head>
-          <meta name="base:app_id" content="69f09324be7ac0b217d53c8a" />
-          <meta name="fc:miniapp" content={JSON.stringify(miniappEmbed)} />
-          <meta name="fc:frame" content={JSON.stringify(miniappEmbed)} />
-          <meta name="fc:app" content={JSON.stringify(miniappEmbed)} />
-        </head>
         <body className={`${inter.variable} ${sourceCodePro.variable}`}>
           <SafeArea>{children}</SafeArea>
         </body>
