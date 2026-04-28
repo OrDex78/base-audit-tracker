@@ -38,7 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
     },
     other: {
-      "base:app_id": "69f091eb495d95989c836e2a",
+      "base:app_id": "69f09324be7ac0b217d53c8a",
       "fc:miniapp": JSON.stringify(miniappEmbed),
       "fc:frame": JSON.stringify(miniappEmbed),
       "fc:app": JSON.stringify(miniappEmbed),
@@ -65,7 +65,7 @@ export default function RootLayout({
     <RootProvider>
       <html lang="en">
         <head>
-          <meta name="base:app_id" content="69f091eb495d95989c836e2a" />
+          <meta name="base:app_id" content="69f09324be7ac0b217d53c8a" />
           <meta name="fc:miniapp" content={JSON.stringify(miniappEmbed)} />
           <meta name="fc:frame" content={JSON.stringify(miniappEmbed)} />
           <meta name="fc:app" content={JSON.stringify(miniappEmbed)} />
