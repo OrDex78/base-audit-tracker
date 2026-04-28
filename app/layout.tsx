@@ -24,15 +24,14 @@ export async function generateMetadata(): Promise<Metadata> {
     title: minikitConfig.miniapp.name,
     description: minikitConfig.miniapp.description,
     openGraph: {
-      title: minikitConfig.miniapp.ogTitle,
-      description: minikitConfig.miniapp.ogDescription,
-      url: minikitConfig.miniapp.homeUrl,
-      siteName: minikitConfig.miniapp.name,
+      title: "Base Audit Tracker",
+      description: "Audit registry for Base contracts",
+      url: "https://base-audit-tracker.vercel.app",
       images: [
         {
-          url: minikitConfig.miniapp.ogImageUrl,
-          width: 1200,
-          height: 630,
+          url: "https://base-audit-tracker.vercel.app/icon.png",
+          width: 512,
+          height: 512,
         },
       ],
       type: "website",
