@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   title: "Base Audit Tracker",
   description: "Check Base contract risk signals and timestamp findings onchain",
   other: {
-    "base:app_id": "69f09324be7ac0b217d53c8a",
+    "base:app_id": "69ef6ad67e92b7a4af93efb0",
     "fc:miniapp": JSON.stringify(miniappEmbed),
     "fc:frame": JSON.stringify(miniappEmbed),
     "fc:app": JSON.stringify(miniappEmbed),
