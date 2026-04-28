@@ -41,6 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
       "base:app_id": "69ef6ad67e92b7a4af93efb0",
       "fc:miniapp": JSON.stringify(miniappEmbed),
       "fc:frame": JSON.stringify(miniappEmbed),
+      "fc:app": JSON.stringify(miniappEmbed),
     },
   };
 }
@@ -63,6 +64,12 @@ export default function RootLayout({
   return (
     <RootProvider>
       <html lang="en">
+        <head>
+          <meta name="base:app_id" content="69ef6ad67e92b7a4af93efb0" />
+          <meta name="fc:miniapp" content={JSON.stringify(miniappEmbed)} />
+          <meta name="fc:frame" content={JSON.stringify(miniappEmbed)} />
+          <meta name="fc:app" content={JSON.stringify(miniappEmbed)} />
+        </head>
         <body className={`${inter.variable} ${sourceCodePro.variable}`}>
           <SafeArea>{children}</SafeArea>
         </body>
