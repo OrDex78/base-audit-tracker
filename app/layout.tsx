@@ -5,6 +5,19 @@ import { minikitConfig } from "@/minikit.config";
 import { RootProvider } from "./rootProvider";
 import "./globals.css";
 
+const miniappEmbed = {
+  version: "next",
+  imageUrl: minikitConfig.miniapp.heroImageUrl,
+  button: {
+    title: `Launch ${minikitConfig.miniapp.name}`,
+    action: {
+      name: minikitConfig.miniapp.name,
+      type: "launch_miniapp",
+      url: minikitConfig.miniapp.homeUrl,
+    },
+  },
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL("https://base-audit-tracker.vercel.app"),
@@ -26,17 +39,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     other: {
       "base:app_id": "69ef6ad67e92b7a4af93efb0",
-      "fc:miniapp": JSON.stringify({
-        version: minikitConfig.miniapp.version,
-        imageUrl: minikitConfig.miniapp.heroImageUrl,
-        button: {
-          title: `Launch ${minikitConfig.miniapp.name}`,
-          action: {
-            name: `Launch ${minikitConfig.miniapp.name}`,
-            type: "launch_miniapp",
-          },
-        },
-      }),
+      "fc:miniapp": JSON.stringify(miniappEmbed),
+      "fc:frame": JSON.stringify(miniappEmbed),
     },
   };
 }
