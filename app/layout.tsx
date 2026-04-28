@@ -18,32 +18,23 @@ const miniappEmbed = {
   },
 };
 
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    metadataBase: new URL("https://base-audit-tracker.vercel.app"),
-    title: minikitConfig.miniapp.name,
-    description: minikitConfig.miniapp.description,
-    openGraph: {
-      title: "Base Audit Tracker",
-      description: "Audit registry for Base contracts",
-      url: "https://base-audit-tracker.vercel.app",
-      images: [
-        {
-          url: "https://base-audit-tracker.vercel.app/icon.png",
-          width: 512,
-          height: 512,
-        },
-      ],
-      type: "website",
-    },
-    other: {
-      "base:app_id": "69f09324be7ac0b217d53c8a",
-      "fc:miniapp": JSON.stringify(miniappEmbed),
-      "fc:frame": JSON.stringify(miniappEmbed),
-      "fc:app": JSON.stringify(miniappEmbed),
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: "Base Audit Tracker",
+  description: "Check Base contract risk signals and timestamp findings onchain",
+  other: {
+    "base:app_id": "69f09324be7ac0b217d53c8a",
+    "fc:miniapp": JSON.stringify(miniappEmbed),
+    "fc:frame": JSON.stringify(miniappEmbed),
+    "fc:app": JSON.stringify(miniappEmbed),
+  },
+  openGraph: {
+    title: "Base Audit Tracker",
+    description: "Check Base contract risk signals and timestamp findings onchain",
+    url: "https://base-audit-tracker.vercel.app",
+    images: [{ url: "https://base-audit-tracker.vercel.app/icon.png", width: 512, height: 512 }],
+    type: "website",
+  },
+};
 
 const inter = Inter({
   variable: "--font-inter",
